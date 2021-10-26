@@ -93,11 +93,8 @@ namespace AZ
 
         void Pass::SetEnabled(bool enabled)
         {
-            if (m_flags.m_enabled != enabled)
-            {
-                m_flags.m_enabled = enabled;
-                OnHierarchyChange();
-            }
+            m_flags.m_enabled = enabled;
+            OnHierarchyChange();
         }
 
         bool Pass::IsEnabled() const
@@ -239,6 +236,11 @@ namespace AZ
         {
             uint32_t bindingIndex = m_outputBindingIndices[index];
             return m_attachmentBindings[bindingIndex];
+        }
+
+        const PassTemplate* Pass::GetPassTemplate() const
+        {
+            return m_template.get();
         }
 
         void Pass::AddAttachmentBinding(PassAttachmentBinding attachmentBinding)
