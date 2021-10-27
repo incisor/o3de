@@ -28,6 +28,8 @@
 #include <AzToolsFramework/Asset/AssetDebugInfo.h>
 #include <AzToolsFramework/Archive/ArchiveAPI.h>
 #include <source/AssetGraphWalker.h>
+#include <AzFramework/Archive/INestedArchive.h>
+#include <AzFramework/Archive/ZipDirStructures.h>
 
 namespace BRAssetBundler
 {
@@ -56,6 +58,12 @@ namespace BRAssetBundler
 
         // There is no need to update the UserSettings file, so we can avoid a race condition by disabling save on shutdown
         AZ::UserSettingsComponentRequestBus::Broadcast(&AZ::UserSettingsComponentRequests::DisableSaveOnFinalize);
+
+        m_archive = AZ::Interface<AZ::IO::IArchive>::Get();
+        if (m_archive == nullptr)
+        {
+            AZ_Error(AppWindowName, false, "Failed to get IArchive interface!");
+        }
         return true;
     }
 
@@ -221,12 +229,16 @@ namespace BRAssetBundler
 
         if(parser->HasSwitch(RegsetFlag))
         {
-            auto iter = AZStd::find(commandLineArgs.begin(), commandLineArgs.end(), AZStd::string("-") + RegsetFlag);
+            while (true)
+            {
+                auto iter = AZStd::find(commandLineArgs.begin(), commandLineArgs.end(), AZStd::string("-") + RegsetFlag);
+                if (iter == commandLineArgs.end())
+                    break;
+                AZStd::string regSetVal = parser->GetSwitchValue(RegsetFlag, 0);
 
-            AZStd::string regSetVal = parser->GetSwitchValue(RegsetFlag, 0);
-
-            commandLineArgs.erase(iter); //erase the regset flag
-            commandLineArgs.erase(iter); // erase the value
+                commandLineArgs.erase(iter); // erase the regset flag
+                commandLineArgs.erase(iter); // erase the value
+            }
         }
 
         if ((commandType == AssetLists || commandType == Seeds) && parser->HasSwitch(AddSeedArg))
@@ -592,32 +604,70 @@ namespace BRAssetBundler
                     if (!AZ::IO::SystemFile::Rename(pakFile.c_str(), bpakFile.c_str(), allowOverwrites))
                         return false/*AZ::Failure(AZStd::string("Failed to rename pak file to bpak file"))*/;
 
-                    AZStd::binary_semaphore listCompleteSemaphore;
-                    bool result = false;
-                    auto listFilesResponseLambda = [&]([[maybe_unused]] bool success, AZStd::string consoleOutput)
+                    if (!AZ::IO::FileIOBase::GetInstance()->Exists(bpakFile.c_str()))
                     {
-                        result = success;
-                        AZ_Printf(AppWindowName, "%s", consoleOutput.c_str());
-                        Platform::ParseConsoleOutputFromListFilesInArchive(consoleOutput, bpakFile, outInfoMap);
-                        listCompleteSemaphore.release();
-                    };
-
-                    AZ::Uuid handle = AZ::Uuid::Create();
-                    AZStd::vector<AZStd::string> fileEntries;
-                    AzToolsFramework::ArchiveCommandsBus::Broadcast(
-                        &AzToolsFramework::ArchiveCommands::ListFilesInArchive, bpakFile, fileEntries, handle, listFilesResponseLambda);
-
-                    const int operationSleepMS = 20;
-                    bool operationCompleted = false;
-                    while (!operationCompleted)
-                    {
-                        operationCompleted = listCompleteSemaphore.try_acquire_for(AZStd::chrono::milliseconds(operationSleepMS));
-                        // When the archive operation is completed, the response lambda is queued on the the tick bus.
-                        // This loop will keep executing queued events on the tickbus until the response unlocks the semaphore.
-                        AZ::TickBus::ExecuteQueuedEvents();
+                        AZ_Error(AppWindowName, false, "Archive '%s' does not exist!", bpakFile.c_str());
+                        return false;
                     }
 
-                    if (!result)
+                    auto archive = m_archive->OpenArchive(bpakFile, {}, AZ::IO::INestedArchive::FLAGS_READ_ONLY);
+                    if (!archive)
+                    {
+                        AZ_Error(AppWindowName, false, "Failed to open archive file '%s'", bpakFile.c_str());
+                        return false;
+                    }
+
+                    AZStd::vector<AZ::IO::Path> fileEntries;
+                    int result = archive->ListAllFiles(fileEntries);
+                    AZStd::vector<AZStd::string> outFileEntries;
+
+                    AZStd::string bpakFileName;
+                    AzFramework::StringFunc::Path::GetFullFileName(bpakFile.c_str(), bpakFileName); // we only get the filename since we're only be profiling from the same folder and not sub-folders.
+
+                    for (const auto& path : fileEntries)
+                    {
+                        auto assetRelativePath = path.String();
+                        auto handle = archive->FindFile(assetRelativePath); // get the Handle so we can work on it.
+                        auto fileEntry = reinterpret_cast<AZ::IO::ZipDir::FileEntry*>(handle);
+                        
+                        outInfoMap[assetRelativePath].m_assetRelativePath = assetRelativePath;
+                        outInfoMap[assetRelativePath].m_size = fileEntry->nEOFOffset - fileEntry->nFileHeaderOffset;
+                        outInfoMap[assetRelativePath].m_offset = fileEntry->nFileHeaderOffset;
+                        outInfoMap[assetRelativePath].m_bundlePath = bpakFileName;
+
+                        AZ_Printf(
+                            AppWindowName, "%s %u %u %u\n", assetRelativePath.c_str(), outInfoMap[assetRelativePath].m_size,
+                            fileEntry->nFileHeaderOffset, fileEntry->nEOFOffset)
+                    }
+
+                    
+
+                    //AZStd::binary_semaphore listCompleteSemaphore;
+                    //bool result = false;
+                    //auto listFilesResponseLambda = [&]([[maybe_unused]] bool success, AZStd::string consoleOutput)
+                    //{
+                    //    result = success;
+                    //    AZ_Printf(AppWindowName, "%s", consoleOutput.c_str());
+                    //    Platform::ParseConsoleOutputFromListFilesInArchive(consoleOutput, bpakFile, outInfoMap);
+                    //    listCompleteSemaphore.release();
+                    //};
+
+                    //AZ::Uuid handle = AZ::Uuid::Create();
+                    //AZStd::vector<AZStd::string> fileEntries;
+                    //AzToolsFramework::ArchiveCommandsBus::Broadcast(
+                    //    &AzToolsFramework::ArchiveCommands::ListFilesInArchive, bpakFile, fileEntries, handle, listFilesResponseLambda);
+
+                    //const int operationSleepMS = 20;
+                    //bool operationCompleted = false;
+                    //while (!operationCompleted)
+                    //{
+                    //    operationCompleted = listCompleteSemaphore.try_acquire_for(AZStd::chrono::milliseconds(operationSleepMS));
+                    //    // When the archive operation is completed, the response lambda is queued on the the tick bus.
+                    //    // This loop will keep executing queued events on the tickbus until the response unlocks the semaphore.
+                    //    AZ::TickBus::ExecuteQueuedEvents();
+                    //}
+
+                    if (result != AZ::IO::ZipDir::ZD_ERROR_SUCCESS)
                     {
                         return false/*AZ::Failure(AZStd::string::format(
                             "Unable to get archive information, target Bundle file path is ( %s ).", bpakFile.c_str()))*/;

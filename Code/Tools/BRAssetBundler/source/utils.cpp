@@ -434,7 +434,6 @@ namespace BRAssetBundler
             {
                 auto path = info.m_assetRelativePath;
 
-                AzFramework::StringFunc::Replace(path, "/", "\\");
                 if (archiveInfoMap.count(path) <= 0)
                 {
                     AZ_Printf(AppWindowName, "can't find %s\n", info.m_assetRelativePath.c_str());
@@ -443,8 +442,12 @@ namespace BRAssetBundler
 
                 // we only write the renamed file (i.e. if the bundle is named game.pak, it will be written as game.bpak)
                 lineStr = AZStd::string::format(
-                    "%s\t%I64u\t%I64u\ti-read \t000000000000000000\n", archiveInfoMap[path].m_bundlePath.c_str(),
+                    "%s\t%u\t%u\ti-read \t000000000000000000\n", archiveInfoMap[path].m_bundlePath.c_str(),
                     archiveInfoMap[path].m_offset, archiveInfoMap[path].m_size);
+
+                AZ_Printf(
+                    AppWindowName, "%s %u %u\n", archiveInfoMap[path].m_bundlePath.c_str(), archiveInfoMap[path].m_offset,
+                    archiveInfoMap[path].m_size)
 
                 bytesWritten = stream.Write(lineStr.size(), lineStr.c_str());
                 if (bytesWritten != lineStr.size())

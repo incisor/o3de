@@ -13,6 +13,7 @@
 #include <AzCore/Debug/TraceMessageBus.h>
 #include <source/utils.h>
 #include <AzToolsFramework/AssetCatalog/PlatformAddressedAssetCatalogManager.h>
+#include <AzFramework/Archive/IArchive.h>
 
 namespace BRAssetBundler
 {
@@ -187,6 +188,6 @@ namespace BRAssetBundler
         AZStd::string m_currentProjectName;
 
         CommandType m_commandType = CommandType::Invalid;
-        
+        AZ::IO::IArchive* m_archive = nullptr;
     };
 }
