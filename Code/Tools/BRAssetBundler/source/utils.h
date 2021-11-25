@@ -22,6 +22,8 @@ namespace BRAssetBundler
         AssetPackInfo(const AZ::Data::AssetId& assetId, const AZStd::string& path, AZ::u32 packId);
         AssetPackInfo(const AZStd::string& path);
 
+        AssetPackInfo& operator=(const AssetPackInfo& rhs);
+
         bool operator==(const AssetPackInfo& rhs) const;
         bool operator!=(const AssetPackInfo& rhs) const;
 
@@ -35,6 +37,8 @@ namespace BRAssetBundler
         AZStd::string m_bundlePath;
         AZ::u32 m_offset = 0;
         AZ::u32 m_size = 0;
+        AZ::u32 m_headerOffset = 0;
+        AZ::u32 m_headerSize = 0;
     };
 
     //! list of asset ids : unordered
@@ -62,8 +66,11 @@ namespace BRAssetBundler
         Compare,
         BundleSettings,
         Bundles,
-        BundleSeed
+        BundleSeed,
+        MergeAssetHints
     };
+
+    extern const AZ::u32 DefaultPackIdValue;
 
     ////////////////////////////////////////////////////////////////////////////////////////////
     // General
@@ -84,30 +91,59 @@ namespace BRAssetBundler
     extern const char* PakExtension;
     extern const char* PakAssetHintsExtension;
     extern const char* SeedAssetHintsExtension;
-    extern const char* ProfilingLogExtension;
+    extern const char* SamplingLogExtension;
     extern const char* AssetBundlerBatchName;
     extern const char* RegsetFlag;
     extern const char* LevelsPathPattern;
     extern const char* ProjectArg;
+    extern const char* PackIdArg;
     
     // Seeds
     extern const char* SeedsCommand;
     extern const char* SeedListFileArg;
     extern const char* AddSeedArg;
     extern const char* RemoveSeedArg;
-    
+    extern const char* AddPlatformToAllSeedsFlag;
+    extern const char* RemovePlatformFromAllSeedsFlag;
+    extern const char* UpdateSeedPathArg;
+    extern const char* RemoveSeedPathArg;
+
     // Asset Lists
     extern const char* AssetListsCommand;
     extern const char* AssetListFileArg;
+    extern const char* AddDefaultSeedListFilesFlag;
+    extern const char* DryRunFlag;
+    extern const char* GenerateDebugFileFlag;
     extern const char* SkipArg;
 
+    ////////////////////////////////////////////////////////////////////////////////////////////
     // Comparison Rules
     extern const char* ComparisonRulesCommand;
+    extern const char* ComparisonRulesFileArg;
+    extern const char* ComparisonTypeArg;
+    extern const char* ComparisonFilePatternArg;
+    extern const char* ComparisonFilePatternTypeArg;
+    extern const char* ComparisonTokenNameArg;
+    extern const char* ComparisonFirstInputArg;
+    extern const char* ComparisonSecondInputArg;
+    extern const char* AddComparisonStepArg;
+    extern const char* RemoveComparisonStepArg;
+    extern const char* MoveComparisonStepArg;
+    extern const char* EditComparisonStepArg;
+    ////////////////////////////////////////////////////////////////////////////////////////////
 
+    ////////////////////////////////////////////////////////////////////////////////////////////
     // Compare
     extern const char* CompareCommand;
+    extern const char* CompareFirstFileArg;
+    extern const char* CompareSecondFileArg;
+    extern const char* CompareOutputFileArg;
+    extern const char* ComparePrintArg;
+    extern const char* IntersectionCountArg;
+    ////////////////////////////////////////////////////////////////////////////////////////////
 
-    // Bundle Settings 
+    ////////////////////////////////////////////////////////////////////////////////////////////
+    // Bundle Settings
     extern const char* BundleSettingsCommand;
     extern const char* BundleSettingsFileArg;
     extern const char* OutputBundlePathArg;
@@ -119,6 +155,10 @@ namespace BRAssetBundler
 
     // Bundle Seed
     extern const char* BundleSeedCommand;
+
+    extern const char* MergeAssetHintsCommand;
+    extern const char* AssetHintsFileArg;
+    extern const char* OutputSamplingLogArg;
 
     extern const char* AssetCatalogFilename;
     ////////////////////////////////////////////////////////////////////////////////////////////
@@ -140,8 +180,8 @@ namespace BRAssetBundler
     
     void RemoveAssetPackInfoFromMap(AssetPackInfoMap& infoMap, const AZ::Data::AssetId& assetId);
     void WriteAssetHints(IdPackInfoListMap infoMap, const AZStd::string& filePath);
-    AZ::Outcome<void, AZStd::string> ReadAssetHints(const AZStd::string& filePath, AzFramework::PlatformFlags platformFlags, AZStd::function<void(const AssetPackInfo&)> callback);
-    AZ::Outcome<void, AZStd::string> WriteProfilingLogs(AZStd::string_view filePath, IdPackInfoListMap infoMap, PathPackInfoMap archiveInfoMap);
+    AZ::Outcome<void, AZStd::string> ReadAssetHints(const AZStd::string& filePath, AzFramework::PlatformFlags platformFlags, AZStd::function<void(AssetPackInfo)> callback);
+    AZ::Outcome<void, AZStd::string> WriteSamplingLogs(AZStd::string_view filePath, IdPackInfoListMap infoMap);
 
     //! direct copy of AssetSeedManager's GetSeedPath
     AZStd::string GetAssetPathById(AZ::Data::AssetId assetId, AzFramework::PlatformFlags platformFlags);

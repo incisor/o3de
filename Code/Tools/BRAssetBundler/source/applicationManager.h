@@ -26,7 +26,7 @@ namespace BRAssetBundler
         AZStd::vector<AZStd::string> m_removeSeedList;
 
         bool m_ignoreFileCase = false;
-
+        AZ::u32 m_packId = DefaultPackIdValue;
         AzFramework::PlatformFlags m_platformFlags = AzFramework::PlatformFlags::Platform_NONE;
         FilePath m_assetCatalogFile;
     };
@@ -47,6 +47,7 @@ namespace BRAssetBundler
 
         bool m_print = false;
         bool m_allowOverwrites = false;
+        AZ::u32 m_packId = DefaultPackIdValue;
 
         AzFramework::PlatformFlags m_platformFlags = AzFramework::PlatformFlags::Platform_NONE;
         FilePath m_assetHintsFile;
@@ -79,6 +80,7 @@ namespace BRAssetBundler
 
         int m_bundleVersion = -1;
         int m_maxBundleSizeInMB = -1;
+        AZ::u32 m_packId = DefaultPackIdValue;
 
         AzFramework::PlatformFlags m_platformFlags = AzFramework::PlatformFlags::Platform_NONE;
 
@@ -98,6 +100,18 @@ namespace BRAssetBundler
     };
 
     using AllBundleSetting = AZStd::vector<AZStd::pair<AzToolsFramework::AssetBundleSettings, BundlesParams>>;
+
+    struct MergeAssetHintsParams
+    {
+        AZ_CLASS_ALLOCATOR(MergeAssetHintsParams, AZ::SystemAllocator, 0);
+
+        AZStd::vector<FilePath> m_assetHintsFiles;
+        FilePath m_outputSampLogPath;
+
+        AzFramework::PlatformFlags m_platformFlags = AzFramework::PlatformFlags::Platform_NONE;
+
+        bool m_allowOverwrites = false;
+    };
 
     class ApplicationManager 
         : public AzToolsFramework::ToolsApplication
@@ -131,6 +145,7 @@ namespace BRAssetBundler
         bool ShouldPrintHelp(const AZ::CommandLine* parser);
         bool ShouldPrintVerbose(const AZ::CommandLine* parser);
         AZStd::string GetCleanCommandLine(const AZ::CommandLine* parser, CommandType commandType);
+        void InitArgValidationLists();
         ////////////////////////////////////////////////////////////////////////////////////////////
 
         ////////////////////////////////////////////////////////////////////////////////////////////
@@ -138,11 +153,13 @@ namespace BRAssetBundler
         AZ::Outcome<SeedsParams, AZStd::string> ParseSeedsCommandData(const AzFramework::CommandLine* parser);
         AZ::Outcome<AssetListsParams, AZStd::string> ParseAssetListsCommandData(const AzFramework::CommandLine* parser);
         AZ::Outcome<BundlesParamsList, AZStd::string> ParseBundlesCommandData(const AzFramework::CommandLine* parser);
+        AZ::Outcome<MergeAssetHintsParams, AZStd::string> ParseMergeAssetHintsCommandData(const AzFramework::CommandLine* parser);
         
+        AZ::Outcome<void, AZStd::string> ValidateInputArgs(const AzFramework::CommandLine* parser, const AZStd::vector<const char*>& validArgList);
         AZ::Outcome<AZStd::string, AZStd::string> GetFilePathArg(const AzFramework::CommandLine* parser, const char* argName, const char* subCommandName, bool isRequired = false);
         template <typename T>
         AZ::Outcome<AZStd::vector<T>, AZStd::string> GetArgsList(const AzFramework::CommandLine* parser, const char* argName, const char* subCommandName, bool isRequired = false);
-        IdPackInfoListMap GetAddSeedArgList(const AzFramework::CommandLine* parser, AssetPackInfoList* levelAssetHints = nullptr);
+        IdPackInfoListMap GetAddSeedArgList(const AzFramework::CommandLine* parser, AZ::u32 globalPackId = DefaultPackIdValue, AssetPackInfoList* levelAssetHints = nullptr);
         AZStd::vector<AZStd::string> GetSkipArgList(const AzFramework::CommandLine* parser);
         ////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -150,8 +167,8 @@ namespace BRAssetBundler
         // Run Commands and Validate param data (value correctness)
         bool RunSeedsCommands(const AZ::Outcome<SeedsParams, AZStd::string>& paramsOutcome);
         bool RunAssetListsCommands(const AZ::Outcome<AssetListsParams, AZStd::string>& paramsOutcome);
-        //bool RunBundleSettingsCommands(const AZ::Outcome<BundleSettingsParams, AZStd::string>& paramsOutcome);
         bool RunBundlesCommands(const AZ::Outcome<BundlesParamsList, AZStd::string>& paramsOutcome);
+        bool RunMergeAssetHintsCommands(const AZ::Outcome<MergeAssetHintsParams, AZStd::string>& paramsOutcome);
         ////////////////////////////////////////////////////////////////////////////////////////////
          
         ////////////////////////////////////////////////////////////////////////////////////////////
@@ -173,12 +190,26 @@ namespace BRAssetBundler
         AZ::u32 LaunchProcess(const AZStd::string& exePath, const AZStd::string& commandLineArgs);
         void AddOrRemoveSeeds(AzFramework::PlatformId platformId, AssetPackInfoList seedList, bool bAddSeed);
         //! Give a list of asset hints of particular levels the function will open and parse them and merge it to one AssetPackInfoMap
-        void MergeLevelAssetHints(AssetPackInfoList fileList, AssetPackInfoMap& infoMap, IdAssetIdListMap& packInfoMap, AzFramework::PlatformFlags platformFlags);
+        void MergeLevelAssetHints(AssetPackInfoList fileList, AssetPackInfoMap& infoMap, IdAssetIdListMap& packInfoMap, AzFramework::PlatformFlags platformFlags, AZ::u32 globalPackId = DefaultPackIdValue);
+        void MergeArchiveInfo(PathPackInfoMap archiveInfoMap, PathPackInfoMap& destInfoMap);
         AZ::Outcome<void, AZStd::string> DoPreBundlingStep(BundlesParams& params, AllBundleSetting& allBundleSettings);
         //! list all files in an archive(pak) and rename it to bpak.
         AZ::Outcome<void, AZStd::string> ListFilesInArchiveAndRename(const AZStd::string& bundleFilePath, PathPackInfoMap& outInfoMap, bool allowOverwrites);
 
         bool SeedsOperationRequiresCatalog(const SeedsParams& params);
+        ////////////////////////////////////////////////////////////////////////////////////////////
+
+        ////////////////////////////////////////////////////////////////////////////////////////////
+        // Output Help Text
+        void OutputHelp(CommandType commandType);
+        void OutputHelpSeeds();
+        void OutputHelpAssetLists();
+        void OutputHelpComparisonRules();
+        void OutputHelpCompare();
+        void OutputHelpBundleSettings();
+        void OutputHelpBundles();
+        void OutputHelpBundleSeed();
+        void OutputHelpMergeAssetHints();
         ////////////////////////////////////////////////////////////////////////////////////////////
 
         AZStd::unique_ptr<AzToolsFramework::AssetSeedManager> m_assetSeedManager;
@@ -189,5 +220,10 @@ namespace BRAssetBundler
 
         CommandType m_commandType = CommandType::Invalid;
         AZ::IO::IArchive* m_archive = nullptr;
+
+        AZStd::vector<const char*> m_allSeedsArgs;
+        AZStd::vector<const char*> m_allAssetListsArgs;
+        AZStd::vector<const char*> m_allBundlesArgs;
+        AZStd::vector<const char*> m_allMergeHintsArgs;
     };
 }

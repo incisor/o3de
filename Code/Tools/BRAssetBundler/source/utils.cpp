@@ -8,6 +8,8 @@
 
 namespace BRAssetBundler
 {
+    const AZ::u32 DefaultPackIdValue = std::numeric_limits<AZ::u32>::max();
+
     // General
     const char* AppWindowName = "BRAssetBundler";
     const char* AppWindowNameVerbose = "BRAssetBundlerVerbose";
@@ -24,32 +26,56 @@ namespace BRAssetBundler
     const char* AssetHintsExtension = ".assethints";
     const char* BPakExtension = ".bpak";
     const char* PakExtension = ".pak";
-    const char* PakAssetHintsExtension = "pak.assethints";
-    const char* SeedAssetHintsExtension = "seed.assethints";
-    const char* ProfilingLogExtension = ".proflog";
+    const char* PakAssetHintsExtension = "pakassethints";
+    const char* SeedAssetHintsExtension = "seedassethints";
+    const char* SamplingLogExtension = "samplog";
     const char* AssetBundlerBatchName = "AssetBundlerBatch.exe";
     const char* RegsetFlag = "regset";
     const char* LevelsPathPattern = "*levels\\*\\*.*";
     const char* ProjectArg = "project-path";
-    
+    const char* PackIdArg = "packId";
+
     // Seeds
     const char* SeedsCommand = "seeds";
     const char* SeedListFileArg = "seedListFile";
     const char* AddSeedArg = "addSeed";
     const char* RemoveSeedArg = "removeSeed";
-    
+    const char* AddPlatformToAllSeedsFlag = "addPlatformToSeeds";
+    const char* RemovePlatformFromAllSeedsFlag = "removePlatformFromSeeds";
+    const char* UpdateSeedPathArg = "updateSeedPath";
+    const char* RemoveSeedPathArg = "removeSeedPath";
+
     // Asset Lists
     const char* AssetListsCommand = "assetLists";
     const char* AssetListFileArg = "assetListFile";
+    const char* AddDefaultSeedListFilesFlag = "addDefaultSeedListFiles";
+    const char* DryRunFlag = "dryRun";
+    const char* GenerateDebugFileFlag = "generateDebugFile";
     const char* SkipArg = "skip";
 
     // Comparison Rules
     const char* ComparisonRulesCommand = "comparisonRules";
+    const char* ComparisonRulesFileArg = "comparisonRulesFile";
+    const char* ComparisonTypeArg = "comparisonType";
+    const char* ComparisonFilePatternArg = "filePattern";
+    const char* ComparisonFilePatternTypeArg = "filePatternType";
+    const char* ComparisonTokenNameArg = "tokenName";
+    const char* ComparisonFirstInputArg = "firstInput";
+    const char* ComparisonSecondInputArg = "secondInput";
+    const char* AddComparisonStepArg = "addComparison";
+    const char* RemoveComparisonStepArg = "removeComparison";
+    const char* MoveComparisonStepArg = "moveComparison";
+    const char* EditComparisonStepArg = "editComparison";
 
     // Compare
     const char* CompareCommand = "compare";
+    const char* CompareFirstFileArg = "firstAssetFile";
+    const char* CompareSecondFileArg = "secondAssetFile";
+    const char* CompareOutputFileArg = "output";
+    const char* ComparePrintArg = "print";
+    const char* IntersectionCountArg = "intersectionCount";
 
-    // Bundle Settings 
+    // Bundle Settings
     const char* BundleSettingsCommand = "bundleSettings";
     const char* BundleSettingsFileArg = "bundleSettingsFile";
     const char* OutputBundlePathArg = "outputBundlePath";
@@ -62,12 +88,20 @@ namespace BRAssetBundler
     // Bundle Seed
     const char* BundleSeedCommand = "bundleSeed";
 
+    // MergeAssetHints
+    const char* MergeAssetHintsCommand = "mergeAssetHints";
+    const char* AssetHintsFileArg = "assetHintsFile";
+    const char* OutputSamplingLogArg = "outputSamplingLog";
+
     const char* AssetCatalogFilename = "assetcatalog.xml";
 
     //JSON Key Names
     const char* GuidKey = "guid";
     const char* SubIdKey = "subId";
     const char* AssetHintKey = "assetHint";
+    const char* OffsetKey = "offset";
+    const char* SizeKey = "size";
+    const char* BundlePathKey = "bundlePath";
 
     ////////////////////////////////////////////////////////////////////////////////////////////
     // AssetPackInfo
@@ -180,6 +214,7 @@ namespace BRAssetBundler
     {
         if (infoMap.count(packInfo.m_assetRelativePath) > 0) // an existing key is found
         {
+            AZ_TracePrintf(BRAssetBundler::AppWindowName, "Skipping ( %s )\n", packInfo.m_assetRelativePath.c_str());
             return true; // skip the add if found
         }
 
@@ -326,7 +361,7 @@ namespace BRAssetBundler
         return assetId;
     }
 
-    AZ::Outcome<void, AZStd::string> ReadAssetHints(const AZStd::string& filePath, AzFramework::PlatformFlags platformFlags, AZStd::function<void(const AssetPackInfo&)> callback)
+    AZ::Outcome<void, AZStd::string> ReadAssetHints(const AZStd::string& filePath, AzFramework::PlatformFlags platformFlags, AZStd::function<void(AssetPackInfo)> callback)
     {
         auto readResult = AZ::Utils::ReadFile<AZStd::string>(AZStd::string_view{ filePath });
         if (readResult.IsSuccess())
@@ -351,7 +386,7 @@ namespace BRAssetBundler
             {
                 for (rapidjson::Value::ConstMemberIterator itr = jsonDocument.MemberBegin(); itr != jsonDocument.MemberEnd(); ++itr)
                 {
-                    AZ::u32 uPackId = AZStd::stoi(AZStd::string(itr->name.GetString()));
+                    AZ::u32 uPackId = AZStd::stoul(AZStd::string(itr->name.GetString()));
                     if (itr->value.IsArray())
                     {
                         for (rapidjson::Value::ConstValueIterator arrayItr = itr->value.Begin(); arrayItr != itr->value.End(); ++arrayItr)
@@ -413,10 +448,10 @@ namespace BRAssetBundler
         }
     }
 
-    AZ::Outcome<void, AZStd::string> WriteProfilingLogs(AZStd::string_view filePath, IdPackInfoListMap infoMap, PathPackInfoMap archiveInfoMap)
+    AZ::Outcome<void, AZStd::string> WriteSamplingLogs(AZStd::string_view filePath, IdPackInfoListMap infoMap)
     {
         // open/create file for writing
-        if (infoMap.empty() || archiveInfoMap.empty())
+        if (infoMap.empty())
             return AZ::Failure(AZStd::string("empty map or list\n"));
 
         AZ::IO::FixedMaxPath filePathFixed = filePath; // Because FileIOStream requires a null-terminated string
@@ -429,30 +464,21 @@ namespace BRAssetBundler
         AZ::u32 uCtr = 0;
         for (auto list : infoMap)
         {
+            if (list.first == DefaultPackIdValue) break; // if we are in this section there's no need to write it in the logs.
+
             uCtr++;
             for (auto info : list.second)
             {
                 auto path = info.m_assetRelativePath;
 
-                if (archiveInfoMap.count(path) <= 0)
-                {
-                    AZ_Printf(AppWindowName, "can't find %s\n", info.m_assetRelativePath.c_str());
-                    continue;
-                }
-
                 // we only write the renamed file (i.e. if the bundle is named game.pak, it will be written as game.bpak)
                 lineStr = AZStd::string::format(
-                    "%s\t%u\t%u\ti-read \t000000000000000000\n", archiveInfoMap[path].m_bundlePath.c_str(),
-                    archiveInfoMap[path].m_offset, archiveInfoMap[path].m_size);
-
-                AZ_Printf(
-                    AppWindowName, "%s %u %u\n", archiveInfoMap[path].m_bundlePath.c_str(), archiveInfoMap[path].m_offset,
-                    archiveInfoMap[path].m_size)
+                    "%s\t%u\t%u\ti-read \t000000000000000000\n", info.m_bundlePath.c_str(), info.m_offset, info.m_size);
 
                 bytesWritten = stream.Write(lineStr.size(), lineStr.c_str());
                 if (bytesWritten != lineStr.size())
                 {
-                    return AZ::Failure(AZStd::string("Failed to write the profiling logs\n"));
+                    return AZ::Failure(AZStd::string("Failed to write the sampling logs\n"));
                 }
             }
 
@@ -461,6 +487,7 @@ namespace BRAssetBundler
             {
                 lineStr += AZStd::string::format("||||||||||  1000\n");
             }
+
             if (uCtr == infoMap.size())
                 lineStr.clear();
 
@@ -469,7 +496,7 @@ namespace BRAssetBundler
                 bytesWritten = stream.Write(lineStr.size(), lineStr.c_str());
                 if (bytesWritten != lineStr.size())
                 {
-                    return AZ::Failure(AZStd::string("Failed to write the profiling logs\n"));
+                    return AZ::Failure(AZStd::string("Failed to write the sampling logs\n"));
                 }
             }
         }
@@ -501,6 +528,17 @@ namespace BRAssetBundler
     {
     }
 
+    AssetPackInfo& AssetPackInfo::operator=(const AssetPackInfo& rhs)
+    {
+        m_assetId = rhs.m_assetId;
+        m_assetRelativePath = rhs.m_assetRelativePath;
+        m_bundlePath = rhs.m_bundlePath;
+        m_packId = rhs.m_packId;
+        m_offset = rhs.m_offset;
+        m_size = rhs.m_size;
+        return *this;
+    }
+
     bool AssetPackInfo::operator==(const AssetPackInfo& rhs) const
     {
         return m_assetId == rhs.m_assetId && m_assetRelativePath == rhs.m_assetRelativePath && m_packId == rhs.m_packId;
@@ -527,7 +565,7 @@ namespace BRAssetBundler
             bNoAssetHint = true;
         }
         
-        if (bNoAssetId && !bNoAssetHint)
+        if (bNoAssetId && !bNoAssetHint && !AZ::StringFunc::Contains(m_assetRelativePath, BPakExtension))
         {
             m_assetId = GetAssetIdByPath(m_assetRelativePath, platformFlags);
         }
@@ -541,6 +579,21 @@ namespace BRAssetBundler
         if(bNoAssetHint && !bNoAssetId)
         {
             m_assetRelativePath = GetAssetPathById(m_assetId, platformFlags);
+        }
+
+        if (jsonObject.HasMember(OffsetKey))
+        {
+            m_offset = jsonObject.FindMember(OffsetKey)->value.GetUint();
+        }
+
+        if (jsonObject.HasMember(SizeKey))
+        {
+            m_size = jsonObject.FindMember(SizeKey)->value.GetUint();
+        }
+
+        if (jsonObject.HasMember(BundlePathKey))
+        {
+            m_bundlePath = jsonObject.FindMember(BundlePathKey)->value.GetString();
         }
 
         m_packId = packId;
@@ -575,6 +628,20 @@ namespace BRAssetBundler
         if(!m_assetId.IsValid() && m_assetRelativePath.empty())
             errStr = "Storing this instance without a valid AssetId or a relative path...";
 
+        rapidjson::Value offset;
+        offset.SetUint(m_offset);
+        outValue.AddMember(rapidjson::StringRef(OffsetKey), offset, allocator);
+
+        rapidjson::Value size;
+        size.SetUint(m_size);
+        outValue.AddMember(rapidjson::StringRef(SizeKey), size, allocator);
+
+        if (!m_bundlePath.empty())
+        {
+            rapidjson::Value pathString;
+            pathString.SetString(m_bundlePath.c_str(), allocator);
+            outValue.AddMember(rapidjson::StringRef(BundlePathKey), pathString, allocator);
+        }
         return errStr;
     }
 } // namespace BRAssetBundler
