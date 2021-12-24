@@ -149,7 +149,7 @@ namespace BRAssetBundler
     }
 
     AzFramework::PlatformFlags GetEnabledPlatformFlags(
-        AZStd::string_view engineRoot, AZStd::string_view assetRoot, AZStd::string_view projectPath)
+        AZStd::string_view engineRoot, AZStd::string_view projectPath)
     {
         auto settingsRegistry = AZ::SettingsRegistry::Get();
         if (settingsRegistry == nullptr)
@@ -158,7 +158,7 @@ namespace BRAssetBundler
             return AzFramework::PlatformFlags::Platform_NONE;
         }
 
-        auto configFiles = AzToolsFramework::AssetUtils::GetConfigFiles(engineRoot, assetRoot, projectPath, true, true, settingsRegistry);
+        auto configFiles = AzToolsFramework::AssetUtils::GetConfigFiles(engineRoot, projectPath, true, true, settingsRegistry);
         auto enabledPlatformList = AzToolsFramework::AssetUtils::GetEnabledPlatforms(*settingsRegistry, configFiles);
         AzFramework::PlatformFlags platformFlags = AzFramework::PlatformFlags::Platform_NONE;
         for (const auto& enabledPlatform : enabledPlatformList)
@@ -392,7 +392,16 @@ namespace BRAssetBundler
                         for (rapidjson::Value::ConstValueIterator arrayItr = itr->value.Begin(); arrayItr != itr->value.End(); ++arrayItr)
                         {
                             AssetPackInfo packInfo;
-                            packInfo.JsonLoad(uPackId, arrayItr->GetObject(), platformFlags);
+                            if (arrayItr->IsString())
+                            {
+                                packInfo.m_packId = uPackId;
+                                packInfo.m_assetRelativePath = arrayItr->GetString();
+                            }
+                            else
+                            {
+                                packInfo.JsonLoad(uPackId, arrayItr->GetObject(), platformFlags);
+                            }
+                            
                             callback(packInfo);
                         }
                     }
@@ -564,16 +573,19 @@ namespace BRAssetBundler
         {
             bNoAssetHint = true;
         }
-        
-        if (bNoAssetId && !bNoAssetHint && !AZ::StringFunc::Contains(m_assetRelativePath, BPakExtension))
+
+        if (!AZ::StringFunc::Contains(m_assetRelativePath, BPakExtension))
         {
-            m_assetId = GetAssetIdByPath(m_assetRelativePath, platformFlags);
-        }
-        else
-        {
-            AZStd::string assetIdStr = AZStd::string::format(
-                "%s:%x", jsonObject.FindMember(GuidKey)->value.GetString(), jsonObject.FindMember(SubIdKey)->value.GetUint());
-            m_assetId = AZ::Data::AssetId::CreateString(assetIdStr);
+            if (bNoAssetId && !bNoAssetHint)
+            {
+                m_assetId = GetAssetIdByPath(m_assetRelativePath, platformFlags);
+            }
+            else
+            {
+                AZStd::string assetIdStr = AZStd::string::format(
+                    "%s:%x", jsonObject.FindMember(GuidKey)->value.GetString(), jsonObject.FindMember(SubIdKey)->value.GetUint());
+                m_assetId = AZ::Data::AssetId::CreateString(assetIdStr);
+            }
         }
 
         if(bNoAssetHint && !bNoAssetId)

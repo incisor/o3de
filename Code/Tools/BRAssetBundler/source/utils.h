@@ -168,8 +168,7 @@ namespace BRAssetBundler
 
     //! Returns platformFlags of all enabled platforms by parsing all the asset processor config files.
     //! Please note that the game project could be in a different location to the engine therefore we need the assetRoot param.
-    AzFramework::PlatformFlags GetEnabledPlatformFlags(
-        AZStd::string_view enginePath, AZStd::string_view assetRoot, AZStd::string_view projectPath);
+    AzFramework::PlatformFlags GetEnabledPlatformFlags(AZStd::string_view enginePath, AZStd::string_view projectPath);
 
     //! Returns true if an existing key is found
     //! checks the infoMap provided if there's an existing key, if yes it will check if the new pack id is lesser than the current one and change it

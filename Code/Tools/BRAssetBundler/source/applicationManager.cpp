@@ -1093,7 +1093,7 @@ namespace BRAssetBundler
 
         // If no platform was specified, defaulting to platforms specified in the asset processor config files
         AzFramework::PlatformFlags platformFlags = GetEnabledPlatformFlags(
-            AZStd::string_view{ AZ::Utils::GetEnginePath() }, AZStd::string_view{ AZ::Utils::GetEnginePath() },
+            AZStd::string_view{ AZ::Utils::GetEnginePath() },
             AZStd::string_view{ AZ::Utils::GetProjectPath() });
         [[maybe_unused]] auto platformsString = AzFramework::PlatformHelper::GetCommaSeparatedPlatformList(platformFlags);
 
