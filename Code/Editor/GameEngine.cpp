@@ -42,8 +42,6 @@
 
 #include "ViewManager.h"
 #include "AnimationContext.h"
-#include "UndoViewPosition.h"
-#include "UndoViewRotation.h"
 #include "MainWindow.h"
 #include "Include/IObjectManager.h"
 #include "ActionManager.h"
@@ -442,7 +440,7 @@ AZ::Outcome<void, AZStd::string> CGameEngine::Init(
     REGISTER_COMMAND("quit", CGameEngine::HandleQuitRequest, VF_RESTRICTEDMODE, "Quit/Shutdown the engine");
 
     EBUS_EVENT(CrySystemEventBus, OnCryEditorInitialized);
-    
+
     return AZ::Success();
 }
 
@@ -465,7 +463,7 @@ void CGameEngine::SetLevelPath(const QString& path)
     const char* oldExtension = EditorUtils::LevelFile::GetOldCryFileExtension();
     const char* defaultExtension = EditorUtils::LevelFile::GetDefaultFileExtension();
 
-    // Store off if 
+    // Store off if
     if (QFileInfo(path + oldExtension).exists())
     {
         m_levelExtension = oldExtension;
