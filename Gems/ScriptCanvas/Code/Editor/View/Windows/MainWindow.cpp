@@ -513,7 +513,6 @@ namespace ScriptCanvasEditor
         m_editorToolbar->AddCustomAction(m_createFunctionOutput);
         connect(m_createFunctionOutput, &QToolButton::clicked, this, &MainWindow::CreateFunctionOutput);
 
-
         {
             m_validateGraphToolButton = new QToolButton();
             m_validateGraphToolButton->setToolTip("Will run a validation check on the current graph and report any warnings/errors discovered.");
@@ -522,6 +521,18 @@ namespace ScriptCanvasEditor
         }
 
         m_editorToolbar->AddCustomAction(m_validateGraphToolButton);
+
+        // Screenshot
+        {
+            m_takeScreenshot = new QToolButton();
+            m_takeScreenshot->setToolTip("Captures a full resolution screenshot of the entire graph or selected nodes into the clipboard");
+            m_takeScreenshot->setIcon(QIcon(":/ScriptCanvasEditorResources/Resources/scriptcanvas_screenshot.png"));
+            m_takeScreenshot->setEnabled(false);
+        }
+
+        m_editorToolbar->AddCustomAction(m_takeScreenshot);
+        connect(m_takeScreenshot, &QToolButton::clicked, this, &MainWindow::OnScreenshot);
+
 
         connect(m_validateGraphToolButton, &QToolButton::clicked, this, &MainWindow::OnValidateCurrentGraph);
 
@@ -1142,7 +1153,10 @@ namespace ScriptCanvasEditor
             return AZ::Failure(AZStd::string::format("Failed to load graph at %s", fileAssetId.Path().c_str()));
         }
 
-        auto loadedGraph = loadedGraphOutcome.TakeValue();
+        AZ_Warning("ScriptCanvas", loadedGraphOutcome.GetValue().deserializationErrors.empty()
+            , "ScriptCanvas graph loaded with skippable errors: %s", loadedGraphOutcome.GetValue().deserializationErrors.c_str());
+
+        auto loadedGraph = loadedGraphOutcome.GetValue().handle;
         CompleteDescriptionInPlace(loadedGraph);
         outTabIndex = CreateAssetTab(loadedGraph, fileState);
 
@@ -1344,7 +1358,7 @@ namespace ScriptCanvasEditor
             return;
         }
 
-        AZ::Outcome<ScriptCanvasEditor::SourceHandle, AZStd::string> outcome = LoadFromFile(fullPath);
+        auto outcome = LoadFromFile(fullPath);
         if (!outcome.IsSuccess())
         {
             QMessageBox::warning(this, "Invalid Source File"
@@ -1354,9 +1368,14 @@ namespace ScriptCanvasEditor
                 , fullPath, outcome.GetError().c_str());
             return;
         }
+        else
+        {
+            AZ_Warning("ScriptCanvas", outcome.GetValue().deserializationErrors.empty()
+                , "File loaded succesfully with deserialiation errors: %s", outcome.GetValue().deserializationErrors.c_str());
+        }
 
         m_errorFilePath.clear();
-        auto activeGraph = ScriptCanvasEditor::SourceHandle(outcome.TakeValue(), assetInfo.m_assetId.m_guid, fullPath);
+        auto activeGraph = ScriptCanvasEditor::SourceHandle(outcome.GetValue().handle, assetInfo.m_assetId.m_guid, fullPath);
         
         auto openOutcome = OpenScriptCanvasAsset(activeGraph, Tracker::ScriptCanvasFileState::UNMODIFIED);
         if (openOutcome)
@@ -3211,6 +3230,7 @@ namespace ScriptCanvasEditor
 
         m_createFunctionOutput->setEnabled(enabled);
         m_createFunctionInput->setEnabled(enabled);
+        m_takeScreenshot->setEnabled(enabled);
 
         // File Menu
         ui->action_Close->setEnabled(enabled);

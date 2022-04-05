@@ -83,7 +83,7 @@
 #define AZ_PUSH_DISABLE_WARNING_GCC(_gccOption)
 
 /// Compiler specific AZ_POP_DISABLE_WARNING. This needs to be matched with the compiler specific AZ_PUSH_DISABLE_WARNINGs
-#define AZ_POP_DISABLE_WARNING_CLANG                     
+#define AZ_POP_DISABLE_WARNING_CLANG
 #define AZ_POP_DISABLE_WARNING_MSVC                     \
     __pragma(warning(pop))
 #define AZ_POP_DISABLE_WARNING_GCC
@@ -176,7 +176,7 @@
 #define AZ_PUSH_DISABLE_WARNING_3(_1, _2, _gccOption)   AZ_PUSH_DISABLE_WARNING_GCC(_gccOption)
 
 /// Pops the warning stack. For use matched with an AZ_PUSH_DISABLE_WARNING
-#define AZ_POP_DISABLE_WARNING                              
+#define AZ_POP_DISABLE_WARNING
     _Pragma("GCC diagnostic pop")
 
 #endif // defined(AZ_COMPILER_CLANG)
@@ -248,14 +248,14 @@
     #if defined(__has_builtin)
         #if __has_builtin(__builtin_is_constant_evaluated)
             #define az_builtin_is_constant_evaluated() __builtin_is_constant_evaluated()
-        #define az_has_builtin_is_constant_evaluated() true
+        #define az_has_builtin_is_constant_evaluated true
         #endif
     #elif AZ_COMPILER_MSVC >= 1928
         #define az_builtin_is_constant_evaluated() __builtin_is_constant_evaluated()
-        #define az_has_builtin_is_constant_evaluated() true
+        #define az_has_builtin_is_constant_evaluated true
     #elif AZ_COMPILER_GCC
         #define az_builtin_is_constant_evaluated() __builtin_is_constant_evaluated()
-        #define az_has_builtin_is_constant_evaluated() true
+        #define az_has_builtin_is_constant_evaluated true
     #endif
 #endif
 
@@ -271,7 +271,7 @@
         }
     }
     #define az_builtin_is_constant_evaluated() AZ::Internal::builtin_is_constant_evaluated()
-    #define az_has_builtin_is_constant_evaluated() false
+    #define az_has_builtin_is_constant_evaluated false
 #endif
 
 // define builtin functions used by char_traits class for efficient compile time and runtime
@@ -302,4 +302,11 @@
 #endif
 #if !defined(az_has_builtin_wmemmove)
     #define az_has_builtin_wmemmove false
+#endif
+
+// no unique address attribute support in C++17
+#if __has_cpp_attribute(no_unique_address)
+    #define AZ_NO_UNIQUE_ADDRESS [[no_unique_address]]
+#else
+    #define AZ_NO_UNIQUE_ADDRESS
 #endif

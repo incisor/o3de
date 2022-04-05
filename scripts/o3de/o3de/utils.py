@@ -163,11 +163,13 @@ def backup_folder(folder: str or pathlib.Path) -> None:
                 renamed = True
 
 
-def download_file(parsed_uri, download_path: pathlib.Path, force_overwrite: bool = False, download_progress_callback = None) -> int:
+def download_file(parsed_uri, download_path: pathlib.Path, force_overwrite: bool = False, object_name = str, download_progress_callback = None) -> int:
     """
     Download file
     :param parsed_uri: uniform resource identifier to zip file to download
     :param download_path: location path on disk to download file
+    :param force_overwrite: force overwrites the local file if one exists
+    :param object_name: name of the object being downloaded
     :param download_progress_callback: callback called with the download progress as a percentage, returns true to request to cancel the download
     """
     if download_path.is_file():
@@ -190,6 +192,18 @@ def download_file(parsed_uri, download_path: pathlib.Path, force_overwrite: bool
                 except KeyError:
                     pass
 
+                def print_progress(downloaded, total_size):
+                    end_ch = '\r'
+                    if total_size == 0 or downloaded > total_size:
+                        print(f'Downloading {object_name} - {downloaded} bytes')
+                    else:
+                        if downloaded == total_size:
+                            end_ch = '\n'
+                        print(f'Downloading {object_name} - {downloaded} of {total_size} bytes - {(downloaded/total_size)*100:.2f}%', end=end_ch)
+
+                if download_progress_callback == None:
+                    download_progress_callback = print_progress
+
                 def download_progress(downloaded_bytes):
                     if download_progress_callback:
                         return download_progress_callback(int(downloaded_bytes), int(download_file_size))
@@ -203,6 +217,9 @@ def download_file(parsed_uri, download_path: pathlib.Path, force_overwrite: bool
         except urllib.error.HTTPError as e:
             logger.error(f'HTTP Error {e.code} opening {parsed_uri.geturl()}')
             return 1
+        except urllib.error.URLError as e:
+            logger.error(f'URL Error {e.reason} opening {parsed_uri.geturl()}')
+            return 1
     else:
         origin_file = pathlib.Path(parsed_uri.geturl()).resolve()
         if not origin_file.is_file():
@@ -212,12 +229,15 @@ def download_file(parsed_uri, download_path: pathlib.Path, force_overwrite: bool
     return 0
 
 
-def download_zip_file(parsed_uri, download_zip_path: pathlib.Path, force_overwrite: bool, download_progress_callback = None) -> int:
+def download_zip_file(parsed_uri, download_zip_path: pathlib.Path, force_overwrite: bool, object_name = str, download_progress_callback = None) -> int:
     """
     :param parsed_uri: uniform resource identifier to zip file to download
     :param download_zip_path: path to output zip file
+    :param force_overwrite: force overwrites the local file if one exists
+    :param object_name: name of the object being downloaded
+    :param download_progress_callback: callback called with the download progress as a percentage, returns true to request to cancel the download
     """
-    download_file_result = download_file(parsed_uri, download_zip_path, force_overwrite, download_progress_callback)
+    download_file_result = download_file(parsed_uri, download_zip_path, force_overwrite, object_name, download_progress_callback)
     if download_file_result != 0:
         return download_file_result
 

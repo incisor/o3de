@@ -11,11 +11,11 @@
 #include <Atom/Feature/RenderCommon.h>
 #include <Atom/Feature/Mesh/MeshFeatureProcessor.h>
 #include <Atom/Feature/Mesh/ModelReloaderSystemInterface.h>
-#include <Atom/Feature/ReflectionProbe/ReflectionProbeFeatureProcessor.h>
 #include <Atom/RPI.Public/Model/ModelLodUtils.h>
 #include <Atom/RPI.Public/Scene.h>
 #include <Atom/RPI.Public/Culling.h>
 #include <Atom/Utils/StableDynamicArray.h>
+#include <ReflectionProbe/ReflectionProbeFeatureProcessor.h>
 
 #include <Atom/RPI.Reflect/Model/ModelAssetCreator.h>
 
@@ -71,6 +71,16 @@ namespace AZ
             );
             m_transformService = nullptr;
             m_forceRebuildDrawPackets = false;
+        }
+
+        TransformServiceFeatureProcessorInterface::ObjectId MeshFeatureProcessor::GetObjectId(const MeshHandle& meshHandle) const
+        {
+            if (meshHandle.IsValid())
+            {
+                return meshHandle->m_objectId;
+            }
+
+            return TransformServiceFeatureProcessorInterface::ObjectId::Null;
         }
 
         void MeshFeatureProcessor::Simulate(const FeatureProcessor::SimulatePacket& packet)
@@ -772,7 +782,7 @@ namespace AZ
                 return;
             }
 
-            const AZStd::array_view<Data::Instance<RPI::ModelLod>>& modelLods = m_model->GetLods();
+            const AZStd::span<const Data::Instance<RPI::ModelLod>>& modelLods = m_model->GetLods();
             if (modelLods.empty())
             {
                 return;

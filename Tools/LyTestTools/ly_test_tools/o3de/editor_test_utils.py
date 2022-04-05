@@ -10,11 +10,13 @@ from __future__ import annotations
 import os
 import time
 import logging
+import re
 
 import ly_test_tools.environment.process_utils as process_utils
 import ly_test_tools.environment.waiter as waiter
 
 logger = logging.getLogger(__name__)
+
 
 def kill_all_ly_processes(include_asset_processor: bool = True) -> None:
     """
@@ -24,7 +26,7 @@ def kill_all_ly_processes(include_asset_processor: bool = True) -> None:
     :return: None
     """
     LY_PROCESSES = [
-        'Editor', 'Profiler', 'RemoteConsole', 'o3de'
+        'Editor', 'Profiler', 'RemoteConsole', 'o3de', 'AutomatedTesting.ServerLauncher'
     ]
     AP_PROCESSES = [
         'AssetProcessor', 'AssetProcessorBatch', 'AssetBuilder'
@@ -35,6 +37,7 @@ def kill_all_ly_processes(include_asset_processor: bool = True) -> None:
     else:
         process_utils.kill_processes_named(LY_PROCESSES, ignore_extensions=True)
 
+
 def get_testcase_module_filepath(testcase_module: Module) -> str:
     """
     return the full path of the test module using always '.py' extension
@@ -42,6 +45,7 @@ def get_testcase_module_filepath(testcase_module: Module) -> str:
     :return str: The full path to the testcase module
     """
     return os.path.splitext(testcase_module.__file__)[0] + ".py"
+
 
 def get_module_filename(testcase_module: Module):
     """
@@ -53,6 +57,7 @@ def get_module_filename(testcase_module: Module):
     """
     return os.path.splitext(os.path.basename(testcase_module.__file__))[0]
 
+
 def retrieve_log_path(run_id: int, workspace: AbstractWorkspaceManager) -> str:
     """
     return the log/ project path for this test run.
@@ -61,6 +66,7 @@ def retrieve_log_path(run_id: int, workspace: AbstractWorkspaceManager) -> str:
     :return str: The full path to the given editor the log/ path
     """
     return os.path.join(workspace.paths.project(), "user", f"log_test_{run_id}")
+
 
 def retrieve_crash_output(run_id: int, workspace: AbstractWorkspaceManager, timeout: float = 10) -> str:
     """
@@ -87,6 +93,7 @@ def retrieve_crash_output(run_id: int, workspace: AbstractWorkspaceManager, time
         crash_info += f"\n{str(ex)}"
     return crash_info
 
+
 def cycle_crash_report(run_id: int, workspace: AbstractWorkspaceManager) -> None:
     """
     Attempts to rename error.log and error.dmp(crash files) into new names with the timestamp on it.
@@ -106,6 +113,7 @@ def cycle_crash_report(run_id: int, workspace: AbstractWorkspaceManager) -> None
                 os.rename(filepath, new_filepath)
             except Exception as ex:
                 logger.warning(f"Couldn't cycle file {filepath}. Error: {str(ex)}")
+
 
 def retrieve_editor_log_content(run_id: int, log_name: str, workspace: AbstractWorkspaceManager, timeout: int = 10) -> str:
     """
@@ -133,6 +141,7 @@ def retrieve_editor_log_content(run_id: int, log_name: str, workspace: AbstractW
         editor_info = f"-- Error reading {log_name}: {str(ex)} --"
     return editor_info
 
+
 def retrieve_last_run_test_index_from_output(test_spec_list: list[EditorTestBase], output: str) -> int:
     """
     Finds out what was the last test that was run by inspecting the input.
@@ -151,3 +160,47 @@ def retrieve_last_run_test_index_from_output(test_spec_list: list[EditorTestBase
         else:
             index += 1
     return index
+
+
+def save_failed_asset_joblogs(workspace: AbstractWorkspace) -> None:
+    """
+    Checks all asset logs in the JobLogs directory to see if the asset has any warnings or errors. If so, the asset is
+    saved via ArtifactManager.
+
+    :param workspace: The AbstractWorkspace to access the JobLogs path
+    :return: None
+    """
+    for walk_tuple in os.walk(workspace.paths.ap_job_logs()):
+        for log_file in walk_tuple[2]:
+            full_log_path = os.path.join(walk_tuple[0], log_file)
+            # Only save asset logs that contain errors or warnings
+            if _check_log_errors_warnings(full_log_path):
+                try:
+                    workspace.artifact_manager.save_artifact(full_log_path)
+                except Exception as e:  # Purposefully broad
+                    logger.warning(f"Error when saving log at path: {full_log_path}\n{e}")
+
+
+def _check_log_errors_warnings(log_path: str) -> bool:
+    """
+    Checks to see if the asset log contains any errors or warnings. Also returns True is no regex is found because
+    something probably went wrong.
+    Example log lines: ~~1643759303647~~1~~00000000000009E0~~AssetBuilder~~S: 0 errors, 1 warnings
+
+    :param log_path: The full path to the asset log file to read
+    :return: True if the regex finds an error or warning, else False
+    """
+    regex_match = None
+    if not os.path.exists(log_path):
+        logger.warning(f"Could not find path {log_path} during asset log collection.")
+        return False
+    log_regex = "(\\d+) errors, (\\d+) warnings"
+    with open(log_path, 'r') as opened_asset_log:
+        for log_line in opened_asset_log:
+            regex_match = re.search(log_regex, log_line)
+            if regex_match is not None:
+                break
+    # If we match any non zero numbers in: n error, n warnings
+    if regex_match is None or (int)(regex_match.group(1)) != 0 or (int)(regex_match.group(2)) != 0:
+        return True
+    return False
